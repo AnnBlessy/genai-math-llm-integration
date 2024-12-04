@@ -34,50 +34,56 @@ Present the result in a user-friendly format and provide additional guidance if 
 ### PROGRAM:
 
 ```
-import math
-import re
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.output_parsers import StructuredOutputParser, ResponseSchema
 
-def calculate_cylinder_volume(radius: float, height: float) -> float:
-    """Calculate the volume of a cylinder given its radius and height."""
-    if radius <= 0 or height <= 0:
-        return "Radius and height must be positive values."
-    return math.pi * radius**2 * height
+# Step 1: Define Parameters and Prompt Template
+prompt_template = PromptTemplate(
+    input_variables=["radius", "height"],
+    template=(
+        "You are a helpful math assistant. Extract parameters and calculate cylinder volume.\n"
+        "Input:\n"
+        "Radius: {radius}\n"
+        "Height: {height}\n\n"
+        "Provide a JSON response like this:\n"
+        "{{\n"
+        '  "radius": <value>,\n'
+        '  "height": <value>,\n'
+        '  "volume": <calculated volume>\n'
+        "}}\n\n"
+        "Ensure the response includes a valid calculation."
+    )
+)
 
+# Step 2: Define the Output Parser
+response_schemas = [
+    ResponseSchema(name="radius", description="The radius of the cylinder."),
+    ResponseSchema(name="height", description="The height of the cylinder."),
+    ResponseSchema(name="volume", description="The calculated volume of the cylinder."),
+]
+output_parser = StructuredOutputParser.from_response_schemas(response_schemas)
 
-def chat_with_llm(query: str) -> str:
-    """Process user query to calculate cylinder volume."""
-    if "cylinder" in query.lower() and "volume" in query.lower():
-        # Use regex to extract radius and height
-        radius = re.search(r"radius\s*(-?\d+(\.\d+)?)", query, re.IGNORECASE)
-        height = re.search(r"height\s*(-?\d+(\.\d+)?)", query, re.IGNORECASE)
+# Step 3: Create the LangChain LLM Chain with Gemini Model
+API_KEY = "**************************"
+llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3, google_api_key=API_KEY)
 
-        if radius and height:
-            # Convert matched groups to float
-            radius = float(radius.group(1))
-            height = float(height.group(1))
+chain = LLMChain(prompt=prompt_template, llm=llm, output_parser=output_parser)
 
-            # Calculate the volume
-            result = calculate_cylinder_volume(radius, height)
-            if isinstance(result, str):  # Error message from the function
-                return result
-            return f"The volume of the cylinder with radius {radius} and height {height} is {result:.2f} cubic units."
-        else:
-            return "Please provide valid radius and height in your query."
-
-    return "I can help you calculate the volume of a cylinder. Please specify the radius and height."
-
-
-# Test cases
-queries = [
-    "What is the volume of a cylinder with radius 4 and height 5?",
-    "Calculate the volume of a cylinder with radius 10 and height -5.",
-    "How to find the volume of a cylinder?",
+# Step 4: Execute the Chain with Examples
+examples = [
+    {"radius": "4", "height": "5"},
+    {"radius": "10", "height": "5.7"},  # This should trigger an error or invalid response
 ]
 
-for query in queries:
-    print(f"Query: {query}")
-    response = chat_with_llm(query)
-    print(f"Response: {response}\n")
+for example in examples:
+    try:
+        result = chain.run(example)
+        print(f"Input: {example}")
+        print(f"Output: {result}\n")
+    except Exception as e:
+        print(f"Error for input {example}: {e}\n")
 
 ```
 
